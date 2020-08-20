@@ -114,7 +114,7 @@ export class Mvc {
         let success;
         let result;
         try {
-            result = await controllerActionFunction(params);
+            result = await controllerActionFunction.call(controller, params);
             success = true;
         } catch(ex) {
             result = ex;
