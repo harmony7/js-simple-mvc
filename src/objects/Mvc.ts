@@ -1,28 +1,29 @@
 import Debug from 'debug';
 const debug = Debug('js-simple-mvc');
 
-interface IController {
+export interface IController {
     canonicalPath: string;
     [action: string]: string | object | ((params: object) => object);
 }
 
-type Loader = null | ((module: any) => IController);
+export type Loader<T> = (module: new (...args: any[]) => T) => (IController | null);
 
 export class Mvc {
 
     appRoot: string;
 
-    loader?: Loader;
+    loaders: Loader<any>[];
 
     constructor(appRoot: string) {
         this.appRoot = appRoot;
+        this.loaders = [];
     }
 
-    setLoader(fn: Loader) {
-        this.loader = fn;
+    public addLoader<T>(fn: Loader<T>) {
+        this.loaders.unshift(fn);
     }
 
-    tryLoadController(pathSegments: string[], action: string): IController | null {
+    public tryLoadController(pathSegments: string[], action: string): IController | null {
 
         const moduleName = pathSegments.join('/');
         const path = this.appRoot + '/' + moduleName;
@@ -41,13 +42,31 @@ export class Mvc {
             return null;
         }
 
-        let controller: IController;
+        let controller: IController | null = null;
         try {
-            controller = this.loader != null ? this.loader(controllerModule) : new controllerModule();
+            for (const loader of this.loaders) {
+                controller = loader(controllerModule);
+                if (controller != null) {
+                    break;
+                }
+            }
         } catch(ex) {
-            debug(`ERROR: Module ${moduleName} could not be called by loader or as a constructor`, ex);
+            debug(`ERROR: Module ${moduleName} could not be called by loader`, ex);
             return null;
         }
+
+        if (controller == null) {
+            try {
+                // If a loader hasn't instantiated this yet, then we
+                // try calling this as a constructor.
+                controller = new controllerModule();
+            } catch(ex) {
+                debug(`ERROR: Module ${moduleName} could not be built a constructor`, ex);
+                return null;
+            }
+        }
+
+        controller = controller as IController;
 
         if (typeof controller[action] == null) {
             debug(`ERROR: Action ${moduleName}/${action} was null`);
@@ -59,7 +78,7 @@ export class Mvc {
 
     }
 
-    findController(pathSegments: string[]): null | [IController, string] {
+    public findController(pathSegments: string[]): null | [IController, string] {
 
         // eg. pathSegments might be 'foo' 'bar' 'baz'
         // Then we want to try foo/bar/baz as a module with index action.
@@ -88,7 +107,7 @@ export class Mvc {
 
     }
 
-    async performAction(path: string, params: object) {
+    public async performAction(path: string, params: object) {
         // Path usually starts with a slash.
         const finalPath = path.startsWith('/') ? path.substring(1) : path;
         const pathSegments = finalPath.split('/');
