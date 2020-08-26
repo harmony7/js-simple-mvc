@@ -38,6 +38,13 @@ export class Mvc {
         }
 
         if (typeof controllerModule !== 'function') {
+            if (controllerModule.default != null) {
+                // If the module was an ES module then check 'default' export
+                controllerModule = controllerModule.default;
+            }
+        }
+
+        if (typeof controllerModule !== 'function') {
             debug(`ERROR: type ${typeof controllerModule} - Module ${moduleName} was not a function`);
             return null;
         }
